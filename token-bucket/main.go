@@ -51,26 +51,29 @@ func (tb *TokenBucket) Allow() bool {
 	return false
 }
 
+func RateLimiter(bucket *TokenBucket) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		if !bucket.Allow() {
+			ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests"})
+			ctx.Abort()
+			return
+		}
+		ctx.Next()
+	}
+}
+
 func main() {
 	bucket := NewTokenBucket(5, 1, time.Second*10)
 
-	r := gin.Default()
+	server := gin.Default()
 
-	r.Use(func(c *gin.Context) {
-		if !bucket.Allow() {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests"})
-			c.Abort()
-			return
-		}
-		c.Next()
+	server.Use(RateLimiter(bucket))
+
+	server.GET("/hello", func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
 	})
 
-	r.GET("/hello", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
-	})
-
-	err := r.Run(":8080")
-	if err != nil {
-		return
+	if err := server.Run(":8080"); err != nil {
+		panic(err)
 	}
 }
